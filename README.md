@@ -9,7 +9,11 @@ Usage
 1. Follow the following steps for initialization:
 
     ```
-    self.logger = logging.getLogger('test')
+    import pyutil_mongo as util
+    import logging
+
+    logger = logging.getLogger('test')
+
     collection_map = {
         'a': 'b',
         'a2': 'b',
@@ -21,9 +25,10 @@ Usage
     ensure_unique_index = {
         'a': [('key3', pymongo.ASCENDING)],
     }
-    mongo_map = cfg.MongoMap(collection_map, ensure_index=ensure_index, ensure_unique_index=ensure_unique_index)
 
-    err = cfg.init(self.logger, [mongo_map])
+    mongo_map = util.MongoMap(collection_map, ensure_index=ensure_index, ensure_unique_index=ensure_unique_index)
+
+    err = util.init(self.logger, [mongo_map])
     ```
 
 2. Do all kinds of ops for the mongodb:
@@ -32,7 +37,7 @@ Usage
     # remove
     err, db_result = util.db_remove('a', {'key1': 'a'})
 
-    # update
+    # update (with $set and upsert by default)
     err, db_result = util.db_update('a', {'key1': 'a'}, {'key2': 3})
 
     # find-one

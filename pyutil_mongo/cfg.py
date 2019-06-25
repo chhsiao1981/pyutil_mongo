@@ -2,20 +2,17 @@
 """Summary
 
 Attributes:
-    CONFIG (dict): Description
-    LOGGER (logging.Logger): Description
+    config (dict): Description
+    logger (logging.Logger): Description
     MONGO_MAPS (list[MongoMap]): Description
 """
 import logging
 from pymongo import MongoClient
 
-from . import errors
-
-CONFIG = {}
+logger = None
+config = {}
 
 MONGO_MAPS = None
-
-LOGGER = None
 
 
 class MongoMap(object):
@@ -36,8 +33,11 @@ class MongoMap(object):
     name = ""
     hostname = ""
     db = ""
+    ssl = False
+    cert = None
+    ca = None
 
-    def __init__(self, collection_map: dict, ensure_index=None, ensure_unique_index=None, name="mongo", hostname="localhost:27017", db="test"):
+    def __init__(self, collection_map: dict, ensure_index=None, ensure_unique_index=None, name="mongo", hostname="localhost:27017", db="test", ssl=False, cert=None, ca=None):
         """Summary
 
         Args:
@@ -54,19 +54,22 @@ class MongoMap(object):
         self.collection_map = collection_map
         self.ensure_index = ensure_index
         self.ensure_unique_index = ensure_unique_index
+        self.ssl = ssl
+        self.cert = cert
+        self.ca = ca
 
 
-def init(logger: logging.Logger, mongo_maps: list):
+def init(the_logger: logging.Logger, mongo_maps: list):
     """Summary
 
     Args:
         logger (logging.Logger): Description
         mongo_maps (list[MongoMap]): Description
     """
-    global LOGGER
+    global logger
     global MONGO_MAPS
 
-    LOGGER = logger
+    logger = the_logger
     MONGO_MAPS = mongo_maps
 
     return restart_mongo()
@@ -87,12 +90,10 @@ def restart_mongo(collection_name=""):
     '''
 
     if MONGO_MAPS is None:
-        return errors.DBInvalidMongoMap()
+        raise Exception('invalid mongo-map')
 
     for mongo_map in MONGO_MAPS:
-        err = _init_mongo_map_core(mongo_map, collection_name=collection_name)
-        if err is not None:
-            return err
+        _init_mongo_map_core(mongo_map, collection_name=collection_name)
 
 
 def _init_mongo_map_core(mongo_map: MongoMap, collection_name=""):
@@ -108,10 +109,13 @@ def _init_mongo_map_core(mongo_map: MongoMap, collection_name=""):
     Deleted Parameters:
         db_name (str, optional): Description
     """
+    global config
+    global logger
+
     name, hostname, db, collection_map, ensure_index, ensure_unique_index = mongo_map.name, mongo_map.hostname, mongo_map.db, mongo_map.collection_map, mongo_map.ensure_index, mongo_map.ensure_unique_index
 
-    if collection_name != "" and collection_name not in collection_map:
-        return None
+    if collection_name != '' and collection_name not in collection_map:
+        return
 
     if ensure_index is None:
         ensure_index = {}
@@ -123,62 +127,49 @@ def _init_mongo_map_core(mongo_map: MongoMap, collection_name=""):
     mongo_server_idx = name + '_MONGO_SERVER'
 
     # mongo_server_url
-    if mongo_server_url not in CONFIG:
-        CONFIG[mongo_server_url] = "mongodb://" + hostname + "/" + db
+    if mongo_server_url not in config:
+        config[mongo_server_url] = "mongodb://" + hostname + "/" + db
 
     # mongo-server-idx
-    if mongo_server_idx not in CONFIG:
-        try:
-            CONFIG[mongo_server_idx] = MongoClient(
-                CONFIG.get(mongo_server_url))[db]
-        except Exception as e:
-            LOGGER.error(
-                'unable to init mongo-client: name: %s hostname: %s db: %s e: %s', name, hostname, db, e)
-            return e
+    if mongo_server_idx not in config:
+        mongo_kwargs = {}
+        if mongo_map.ssl:
+            mongo_kwargs.update({
+                'ssl': True,
+                'authSource': '$external',
+                'authMechanism': 'MONGODB-X509',
+                'ssl_certfile': mongo_map.cert,
+                'ssl_ca_certs': mongo_map.ca,
+            })
+
+        config[mongo_server_idx] = MongoClient(
+            config.get(mongo_server_url),
+            **mongo_kwargs,
+        )[db]
 
     # collection
     for (key, val) in collection_map.items():
-        if key in CONFIG and collection_name == "":
-            LOGGER.warning(
-                'key already in config: key: %s config: %s', key, CONFIG[key])
+        if key in config and collection_name == "":
+            logger.warning('key already in config: key: %s config: %s', key, config[key])
             continue
 
-        try:
-            LOGGER.info('mongo: %s => %s', key, val)
-            CONFIG[key] = CONFIG.get(mongo_server_idx)[val]
-        except Exception as e:
-            LOGGER.error('unable to init mongo: name: %s mongo_server_hostname: %s db: %s e: %s',
-                         name, mongo_server_hostname, db, e)
-
-            for key, val in mongo_map.items():
-                CONFIG[key] = None
-            return e
+        logger.info('mongo: %s => %s', key, val)
+        config[key] = config.get(mongo_server_idx)[val]
 
     # enure index
     for key, val in ensure_index.items():
-        LOGGER.info('to ensure_index: key: %s', key)
-        try:
-            CONFIG[key].create_index(val, background=True)
-        except Exception as e:
-            LOGGER.error('unable to ensure_index: key: %s e: %s', key, e)
-            return e
+        logger.info('to ensure_index: key: %s', key)
+        config[key].create_index(val, background=True)
 
     # enure unique index
     for key, val in ensure_unique_index.items():
-        LOGGER.info('to ensure_unique_index: key: %s', key)
-        try:
-            CONFIG[key].create_index(val, background=True, unique=True)
-        except Exception as e:
-            LOGGER.error(
-                'unable to ensure unique index: key: %s e: %s', key, e)
-            isinstance(e, )
-            return e
+        logger.info('to ensure_unique_index: key: %s', key)
+        config[key].create_index(val, background=True, unique=True)
 
-    return None
 
 def clean():
-    global CONFIG
+    global config
     global MONGO_MAPS
 
-    CONFIG = {}
+    config = {}
     MONGO_MAPS = None

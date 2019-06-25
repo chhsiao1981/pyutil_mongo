@@ -9,6 +9,7 @@ from pyutil_mongo import util
 
 
 class TestInit(unittest.TestCase):
+
     def setUp(self):
         pass
 
@@ -26,9 +27,9 @@ class TestInit(unittest.TestCase):
 
         err = pyutil_mongo.init(logger, [mongo_map])
 
-        logger.debug('cfg.CONFIG: %s', cfg.CONFIG)
+        logger.debug('cfg.config: %s', cfg.config)
 
         self.assertIsNone(err)
 
-        self.assertEqual(3, len(cfg.CONFIG))
-        self.assertEqual(True, 'a' in cfg.CONFIG)
+        self.assertEqual(3, len(cfg.config))
+        self.assertEqual(True, 'a' in cfg.config)

@@ -3,7 +3,6 @@
 import re
 import copy
 
-from .errors import DBInvalidMongoMap, DBException, DBAlreadyExists, ErrorFlattenResults
 from . import cfg
 
 
@@ -18,7 +17,7 @@ def db_find_one_ne(db_name, key, fields=None):
     Returns:
         dict: db-result
     """
-    error, result = db_find_one(db_name, key, fields)
+    err, result = db_find_one(db_name, key, fields)
 
     return result
 
@@ -37,20 +36,20 @@ def db_find_one(db_name, key, fields=None):
     if fields is None:
         fields = {'_id': False}
 
-    error = None
+    err = None
     result = {}
     try:
-        result = cfg.CONFIG.get(db_name).find_one(key, projection=fields)
+        result = cfg.config.get(db_name).find_one(key, projection=fields)
         if not result:
             result = {}
         result = dict(result)
     except Exception as e:
-        error = DBException('unable to db_find_one: db_name: %s e: %s' % (db_name, e))
+        err = e
         result = {}
 
         _db_restart_mongo(db_name, e)
 
-    return error, result
+    return err, result
 
 
 def db_find_ne(db_name, key=None, fields=None):
@@ -64,7 +63,7 @@ def db_find_ne(db_name, key=None, fields=None):
     Returns:
         list: db-results
     """
-    error, result = db_find(db_name, key, fields)
+    err, result = db_find(db_name, key, fields)
 
     return result
 
@@ -83,18 +82,18 @@ def db_find(db_name, key=None, fields=None):
     if fields is None:
         fields = {'_id': False}
 
-    error = None
+    err = None
     result = []
     try:
-        error, db_result_it = db_find_it(db_name, key, fields)
+        err, db_result_it = db_find_it(db_name, key, fields)
         result = list(db_result_it)
     except Exception as e:
-        error = DBException('unable to db_find: db_name: %s e: %s' % (db_name, e))
+        err = e
         result = []
 
         _db_restart_mongo(db_name, e)
 
-    return error, result
+    return err, result
 
 
 def db_find_it_ne(db_name, key=None, fields=None, with_id=False):
@@ -109,7 +108,7 @@ def db_find_it_ne(db_name, key=None, fields=None, with_id=False):
     Returns:
         iterator: db-results
     """
-    error, result = db_find_it(db_name, key, fields, with_id=with_id)
+    err, result = db_find_it(db_name, key, fields, with_id=with_id)
 
     return result
 
@@ -129,19 +128,19 @@ def db_find_it(db_name, key=None, fields=None, with_id=False):
     if fields is None and not with_id:
         fields = {'_id': False}
 
-    error = None
+    err = None
     result = []
     try:
-        result = cfg.CONFIG.get(db_name).find(filter=key, projection=fields)
+        result = cfg.config.get(db_name).find(filter=key, projection=fields)
     except Exception as e:
-        error = DBException('unable to db_find_iter: db_name: %s key: %s e: %s' % (db_name, key, e))
+        err = e
         result = None
         _db_restart_mongo(db_name, e)
 
     if not result:
         result = []
 
-    return error, result
+    return err, result
 
 
 def db_insert_ne(db_name, val):
@@ -154,7 +153,7 @@ def db_insert_ne(db_name, val):
     Returns:
         dict: db-insert-result
     """
-    error, result = db_insert(db_name, val)
+    err, result = db_insert(db_name, val)
 
     return result
 
@@ -169,21 +168,21 @@ def db_insert(db_name, val):
     Returns:
         dict: db-insert-result
     """
-    error = None
+    err = None
     if not val:
-        error = DBException('db_name: %s no val: val: %s' % (db_name, val))
-        return error, {}
+        err = Exception('db_name: %s no val: val: %s' % (db_name, val))
+        return err, {}
 
     result = []
     try:
-        result = cfg.CONFIG.get(db_name).insert_many(val, ordered=False)
+        result = cfg.config.get(db_name).insert_many(val, ordered=False)
     except Exception as e:
-        error = DBException('unable to insert: db_name: %s e: %s' % (db_name, e))
+        err = e
         result = []
 
         _db_restart_mongo(db_name, e)
 
-    return error, result
+    return err, result
 
 
 def db_bulk_update(db_name, update_data, is_set=True, upsert=True, multi=True):
@@ -199,7 +198,6 @@ def db_bulk_update(db_name, update_data, is_set=True, upsert=True, multi=True):
     Returns:
         (Error, dict): db-bulk-update-result
     """
-    error = None
     update_data = [each_data for each_data in update_data if each_data.get('key', {}) and each_data.get('val', {})]
 
     return db_force_bulk_update(db_name, update_data, is_set=is_set, upsert=upsert, multi=multi)
@@ -218,7 +216,7 @@ def db_force_bulk_update(db_name, update_data, is_set, upsert, multi):
     Returns:
         (Error, dict): db-bulk-update-result
     """
-    error = None
+    err = None
     if is_set:
         for each_data in update_data:
             val = each_data.get('val', {})
@@ -226,7 +224,7 @@ def db_force_bulk_update(db_name, update_data, is_set, upsert, multi):
 
     result = None
     try:
-        bulk = cfg.CONFIG.get(db_name).initialize_unordered_bulk_op()
+        bulk = cfg.config.get(db_name).initialize_unordered_bulk_op()
         for each_data in update_data:
             key = each_data.get('key', {})
             val = each_data.get('val', {})
@@ -243,12 +241,12 @@ def db_force_bulk_update(db_name, update_data, is_set, upsert, multi):
                 bulk.find(key).update_one(val)
         result = bulk.execute()
     except Exception as e:
-        error = DBException('unable to db_force_bulk_update: db_name: %s e: %s' % (db_name, e))
+        err = e
         result = None
 
         _db_restart_mongo(db_name, e)
 
-    return error, getattr(result, 'raw_result', {})
+    return err, getattr(result, 'raw_result', {})
 
 
 def db_update(db_name, key, val, is_set=True, upsert=True, multi=True):
@@ -265,11 +263,11 @@ def db_update(db_name, key, val, is_set=True, upsert=True, multi=True):
     Returns:
         (Error, dict): db-update-result
     """
-    error = None
+    err = None
 
     if not key or not val:
-        error = DBException('unable to db_update: no key or val: db_name: %s' % (db_name))
-        return error, {}
+        err = Exception('unable to db_update: no key or val: db_name: %s' % (db_name))
+        return err, {}
 
     return db_force_update(db_name, key, val, is_set=is_set, upsert=upsert, multi=multi)
 
@@ -288,7 +286,7 @@ def db_force_update(db_name, key, val, is_set=True, upsert=True, multi=True):
     Returns:
         (Error, dict): db-update-result
     """
-    error = None
+    err = None
 
     if is_set:
         val = {"$set": val}
@@ -296,16 +294,16 @@ def db_force_update(db_name, key, val, is_set=True, upsert=True, multi=True):
     result = None
     try:
         if not multi:
-            result = cfg.CONFIG.get(db_name).update_one(key, val, upsert=upsert)
+            result = cfg.config.get(db_name).update_one(key, val, upsert=upsert)
         else:
-            result = cfg.CONFIG.get(db_name).update_many(key, val, upsert=upsert)
+            result = cfg.config.get(db_name).update_many(key, val, upsert=upsert)
     except Exception as e:
-        error = DBException('unable to db_force_update: db_name: %s e: %s' % (db_name, e))
+        err = e
         result = None
 
         _db_restart_mongo(db_name, e)
 
-    return error, getattr(result, 'raw_result', {})
+    return err, getattr(result, 'raw_result', {})
 
 
 def db_insert_one(db_name, doc):
@@ -318,11 +316,11 @@ def db_insert_one(db_name, doc):
     Returns:
         (Error, dict): db-save-result
     """
-    error = None
+    err = None
 
     if not doc:
-        error = DBException('db_insert_one: no doc: db_name: %s' % (db_name))
-        return error, {}
+        err = Exception('db_insert_one: no doc: db_name: %s' % (db_name))
+        return err, {}
 
     return db_insert(db_name, [doc])
 
@@ -337,11 +335,11 @@ def db_remove(db_name, key):
     Returns:
         (Error, dict): db-remove-result
     """
-    error = None
+    err = None
 
     if not key:
-        error = DBException('unable to db_remove: no key: db_name: %s' % (db_name))
-        return error, {}
+        err = Exception('unable to db_remove: no key: db_name: %s' % (db_name))
+        return err, {}
 
     return db_force_remove(db_name, key=key)
 
@@ -359,18 +357,18 @@ def db_force_remove(db_name, key=None):
     if not key:
         key = {}
 
-    error = None
+    err = None
 
     result = None
     try:
-        result = cfg.CONFIG.get(db_name).delete_many(key)
+        result = cfg.config.get(db_name).delete_many(key)
     except Exception as e:
-        error = DBException('unable to db_force_remove: db_name: %s key: %s e: %s' % (db_name, key, e))
+        err = e
         result = None
 
         _db_restart_mongo(db_name, e)
 
-    return error, getattr(result, 'raw_result', {})
+    return err, getattr(result, 'raw_result', {})
 
 
 def db_distinct(db_name, distinct_key, query_key, fields=None, with_id=False):
@@ -389,19 +387,19 @@ def db_distinct(db_name, distinct_key, query_key, fields=None, with_id=False):
     if fields is None and not with_id:
         fields = {'_id': False}
 
-    error = None
+    err = None
 
     results = []
     try:
-        db_result = cfg.CONFIG.get(db_name).find(query_key, projection=fields)
+        db_result = cfg.config.get(db_name).find(query_key, projection=fields)
         results = db_result.distinct(distinct_key)
     except Exception as e:
-        error = DBException('unable to db_distinct: db_name: %s query_key: %s distinct_key: %s e: %s' % (db_name, query_key, distinct_key, e))
+        err = e
         results = []
 
         _db_restart_mongo(db_name, e)
 
-    return error, results
+    return err, results
 
 
 def db_set_if_not_exists(db_name, key, val, fields=None, with_id=False):
@@ -420,21 +418,21 @@ def db_set_if_not_exists(db_name, key, val, fields=None, with_id=False):
     if fields is None and not with_id:
         fields = {'_id': False}
 
-    error = None
+    err = None
     result = {}
     try:
-        result = cfg.CONFIG.get(db_name).find_one_and_update(key, {"$setOnInsert": val}, projection=fields, upsert=True)
+        result = cfg.config.get(db_name).find_one_and_update(key, {"$setOnInsert": val}, projection=fields, upsert=True)
     except Exception as e:
-        error = DBException('unable to set on insert: db_name: %s key: %s e: %s' % (db_name, key, e))
+        err = e
         result = {}
 
         _db_restart_mongo(db_name, e)
 
-    if error:
-        return error, {}
+    if err:
+        return err, {}
 
     if result:
-        return DBAlreadyExists('already exists: db_name: %s key: %s' % (db_name, key)), result
+        return Exception('already exists: db_name: %s key: %s' % (db_name, key)), result
 
     return None, {}
 
@@ -458,23 +456,23 @@ def db_find_and_modify(db_name, key, val, fields=None, with_id=False, is_set=Tru
     if fields is None and not with_id:
         fields = {'_id': False}
 
-    error = None
+    err = None
 
     if is_set:
         val = {'$set': val}
 
     result = {}
     try:
-        result = cfg.CONFIG.get(db_name).find_one_and_update(key, val, projection=fields, upsert=upsert, multi=multi)
+        result = cfg.config.get(db_name).find_one_and_update(key, val, projection=fields, upsert=upsert, multi=multi)
         if not result:
             result = {}
     except Exception as e:
-        error = DBException('unable to db_find_and_modify: db_name: %s key: %s val: %s e: %s' % (db_name, key, val, e))
+        err = e
         result = {}
 
         _db_restart_mongo(db_name, e)
 
-    return error, dict(result)
+    return err, dict(result)
 
 
 def db_aggregate_iter(db_name, pipe):
@@ -487,28 +485,16 @@ def db_aggregate_iter(db_name, pipe):
     Returns:
         (Error, iterator): db-aggregate-results
     """
-    error = None
+    err = None
 
     db_result = []
     try:
-        db_result = cfg.CONFIG.get(db_name).aggregate(pipeline=pipe, cursor={}, allowDiskUse=True)
+        db_result = cfg.config.get(db_name).aggregate(pipeline=pipe, cursor={}, allowDiskUse=True)
     except Exception as e:
-        error = DBException('unable to db_aggregate_iter: possibly 2.4 issue db_name: %s pipe: %s e: %s' % (db_name, pipe, e))
+        err = e
         db_result = []
 
-    if not error:
-        return error, db_result
-
-    try:
-        db_result = cfg.CONFIG.get(db_name).aggregate(pipeline=pipe)
-        db_result = db_result.get('result', [])
-    except Exception as e:
-        error = DBException('unable to db_aggregate_iter: db_name: %s pipe: %s e: %s' % (db_name, pipe, e))
-        db_result = []
-
-        _db_restart_mongo(db_name, e)
-
-    return error, db_result
+    return err, db_result
 
 
 def db_aggregate(db_name, pipe):
@@ -521,22 +507,22 @@ def db_aggregate(db_name, pipe):
     Returns:
         (Error, list): db-aggregate-results
     """
-    error = None
+    err = None
 
-    error, db_result = db_aggregate_iter(db_name, pipe)
-    if error:
-        return error, []
+    err, db_result = db_aggregate_iter(db_name, pipe)
+    if err:
+        return err, []
 
     result = []
     try:
         result = list(db_result)
     except Exception as e:
         result = []
-        error = DBException('unable to db_aggregate: db_anme: %s pipe: %s e: %s' % (db_name, pipe, e))
+        err = e
 
         _db_restart_mongo(db_name, e)
 
-    return error, result
+    return err, result
 
 
 def db_aggregate_parse_results(db_results):
@@ -549,9 +535,9 @@ def db_aggregate_parse_results(db_results):
     Returns:
         TYPE: Description
     '''
-    results_with_error = [db_aggregate_parse_result(db_result) for db_result in db_results]
+    results_with_err = [db_aggregate_parse_result(db_result) for db_result in db_results]
 
-    return _flatten_results_with_error(results_with_error)
+    return _flatten_results_with_err(results_with_err)
 
 
 def db_aggregate_parse_result(db_result):
@@ -585,9 +571,9 @@ def db_max(db_name, key, query, group_columns=None):
     Returns:
         (Error, dict): largest record
     """
-    error, db_results = _db_max_list(db_name, key, query, group_columns)
-    if error:
-        return error, db_results
+    err, db_results = _db_max_list(db_name, key, query, group_columns)
+    if err:
+        return err, db_results
 
     if not db_results:
         return DBException('[empty]'), {}
@@ -618,10 +604,10 @@ def _db_max_list(db_name, key, query, group_columns=None):
         {'$group': group},
     ]
 
-    error, results = db_aggregate(db_name, pipe)
+    err, results = db_aggregate(db_name, pipe)
 
-    if error:
-        return error, []
+    if err:
+        return err, []
 
     return None, results
 
@@ -644,10 +630,10 @@ def _db_restart_mongo(db_name, e):
 
     # ignore dup error
     if re.search('^E11000', e_str):
-        cfg.LOGGER.debug('E11000')
+        cfg.logger.debug('E11000: e: %s', e)
         return None
 
-    cfg.LOGGER.debug('to restart mongo')
+    cfg.logger.debug('to restart mongo: e: %s', e)
 
     cfg.restart_mongo(db_name)
 
@@ -655,35 +641,35 @@ def _db_restart_mongo(db_name, e):
 
 
 def drop(db_name):
-    error = None
+    err = None
     try:
-        cfg.CONFIG.get(db_name).drop()
+        cfg.config.get(db_name).drop()
     except Exception as e:
-        error = DBException('unable to db_drop: db_name: %s e: %s' % (db_name, e))
+        err = e
 
         _db_restart_mongo(db_name, e)
 
-    return error
+    return err
 
 
-def _flatten_results_with_error(results_with_error):
+def _flatten_results_with_err(results_with_err):
     """flatten results with error
 
     Args:
-        results_with_error ([(Error, result)]): results with error
+        results_with_err ([(Error, result)]): results with error
 
     Returns:
         (Error, [result]): error, results
     """
-    error_msg_list = []
+    err_msg_list = []
     results = []
-    for idx, (each_error, each_result) in enumerate(results_with_error):
-        if each_error:
-            error_msg_list.append('(%s/%s) e: %s' % (idx, len(results_with_error), each_error))
+    for idx, (each_err, each_result) in enumerate(results_with_err):
+        if each_err:
+            err_msg_list.append('(%s/%s) e: %s' % (idx, len(results_with_err), each_err))
         results.append(each_result)
 
-    error = None if not error_msg_list else ErrorFlattenResults(','.join(error_msg_list))
-    if error:
-        return error, results
+    err = None if not err_msg_list else Exception(','.join(err_msg_list))
+    if err:
+        return err, results
 
     return None, results

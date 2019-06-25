@@ -7,7 +7,6 @@ from pymongo.cursor import Cursor
 
 from pyutil_mongo import cfg
 from pyutil_mongo import util
-from pyutil_mongo import errors
 
 
 class TestUtil(unittest.TestCase):
@@ -183,9 +182,9 @@ class TestUtil(unittest.TestCase):
         self.assertIsNone(err)
         self.assertEqual(3, db_result)
 
-    def test__flatten_results_with_error(self):
-        results_with_error = [(errors.DBInvalidMongoMap(), {}), (errors.DBException(), {})]
+    def test__flatten_results_with_err(self):
+        results_with_err = [(Exception('err0'), {}), (Exception('err1'), {})]
 
-        err, results = util._flatten_results_with_error(results_with_error)
-        self.logger.debug('after _flatten_results_with_error: e: %s results: %s', err, results)
+        err, results = util._flatten_results_with_err(results_with_err)
+        self.logger.debug('after _flatten_results_with_err: e: %s results: %s', err, results)
         self.assertIsNotNone(err)
