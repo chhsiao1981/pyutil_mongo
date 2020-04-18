@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="pyutil_mongo",
-    version="1.0.0",
+    version="1.0.1",
     author="chhsiao",
     author_email="hsiao.chuanheng@gmail.com",
     description="python util for mongodb",
