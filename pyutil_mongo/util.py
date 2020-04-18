@@ -6,7 +6,16 @@ import copy
 from . import cfg
 
 
-def db_find_one_ne(db_name, key, fields=None):
+def db_list():
+    """List db-name: collection-names
+
+    Returns:
+        dict: {db-name: [collection-name]}
+    """
+    return {db_name: val['db'].keys() for db_name, val in cfg.config.items()}
+
+
+def db_find_one_ne(collection_name, key, fields=None, db_name=None):
     """Find one data from the db, return {} if error occurred.
 
     Args:
@@ -17,12 +26,12 @@ def db_find_one_ne(db_name, key, fields=None):
     Returns:
         dict: db-result
     """
-    err, result = db_find_one(db_name, key, fields)
+    err, result = db_find_one(collection_name, key, fields, db_name)
 
     return result
 
 
-def db_find_one(db_name, key, fields=None):
+def db_find_one(collection_name, key, fields=None, db_name=None):
     """Find one data from the db with customized defaults
 
     Args:
@@ -36,10 +45,16 @@ def db_find_one(db_name, key, fields=None):
     if fields is None:
         fields = {'_id': False}
 
+    if db_name is None:
+        db_name = _get_default_db(collection_name)
+
+    if db_name is None:
+        return Exception('unable to get db_name: collection: %s' % (collection_name)), {}
+
     err = None
     result = {}
     try:
-        result = cfg.config.get(db_name).find_one(key, projection=fields)
+        result = cfg.config[db_name]['db'][collection_name].find_one(key, projection=fields)
         if not result:
             result = {}
         result = dict(result)
@@ -47,12 +62,12 @@ def db_find_one(db_name, key, fields=None):
         err = e
         result = {}
 
-        _db_restart_mongo(db_name, e)
+        _db_restart_mongo(db_name, collection_name, e)
 
     return err, result
 
 
-def db_find_ne(db_name, key=None, fields=None):
+def db_find_ne(collection_name, key=None, fields=None, db_name=None):
     """Find data from the db, return [] if error occurred.
 
     Args:
@@ -63,12 +78,12 @@ def db_find_ne(db_name, key=None, fields=None):
     Returns:
         list: db-results
     """
-    err, result = db_find(db_name, key, fields)
+    err, result = db_find(collection_name, key, fields, db_name)
 
     return result
 
 
-def db_find(db_name, key=None, fields=None):
+def db_find(collection_name, key=None, fields=None, db_name=None):
     """Find data from the db with customized defaults
 
     Args:
@@ -85,18 +100,18 @@ def db_find(db_name, key=None, fields=None):
     err = None
     result = []
     try:
-        err, db_result_it = db_find_it(db_name, key, fields)
+        err, db_result_it = db_find_it(collection_name, key, fields, db_name)
         result = list(db_result_it)
     except Exception as e:
         err = e
         result = []
 
-        _db_restart_mongo(db_name, e)
+        _db_restart_mongo(db_name, collection_name, e)
 
     return err, result
 
 
-def db_find_it_ne(db_name, key=None, fields=None, with_id=False):
+def db_find_it_ne(collection_name, key=None, fields=None, with_id=False, db_name=None):
     """Find data from the db, return [] if error occurred.
 
     Args:
@@ -108,12 +123,12 @@ def db_find_it_ne(db_name, key=None, fields=None, with_id=False):
     Returns:
         iterator: db-results
     """
-    err, result = db_find_it(db_name, key, fields, with_id=with_id)
+    err, result = db_find_it(collection_name, key, fields, with_id=with_id, db_name=db_name)
 
     return result
 
 
-def db_find_it(db_name, key=None, fields=None, with_id=False):
+def db_find_it(collection_name, key=None, fields=None, with_id=False, db_name=None):
     """Find data from the db with customized defaults.
 
     Args:
@@ -128,14 +143,20 @@ def db_find_it(db_name, key=None, fields=None, with_id=False):
     if fields is None and not with_id:
         fields = {'_id': False}
 
+    if db_name is None:
+        db_name = _get_default_db(collection_name)
+
+    if db_name is None:
+        return Exception('unable to get db_name: collection: %s' % (collection_name)), []
+
     err = None
     result = []
     try:
-        result = cfg.config.get(db_name).find(filter=key, projection=fields)
+        result = cfg.config[db_name]['db'][collection_name].find(filter=key, projection=fields)
     except Exception as e:
         err = e
         result = None
-        _db_restart_mongo(db_name, e)
+        _db_restart_mongo(db_name, collection_name, e)
 
     if not result:
         result = []
@@ -143,7 +164,7 @@ def db_find_it(db_name, key=None, fields=None, with_id=False):
     return err, result
 
 
-def db_insert_ne(db_name, val):
+def db_insert_ne(collection_name, val, db_name=None):
     """Insert data to the db
 
     Args:
@@ -153,12 +174,12 @@ def db_insert_ne(db_name, val):
     Returns:
         dict: db-insert-result
     """
-    err, result = db_insert(db_name, val)
+    err, result = db_insert(collection_name, val, db_name)
 
     return result
 
 
-def db_insert(db_name, val):
+def db_insert(collection_name, val, db_name=None):
     """Insert data to the db
 
     Args:
@@ -173,19 +194,25 @@ def db_insert(db_name, val):
         err = Exception('db_name: %s no val: val: %s' % (db_name, val))
         return err, {}
 
-    result = []
+    if db_name is None:
+        db_name = _get_default_db(collection_name)
+
+    if db_name is None:
+        return Exception('unable to get db_name: collection: %s' % (collection_name)), {}
+
+    result = {}
     try:
-        result = cfg.config.get(db_name).insert_many(val, ordered=False)
+        result = cfg.config[db_name]['db'][collection_name].insert_many(val, ordered=False)
     except Exception as e:
         err = e
         result = []
 
-        _db_restart_mongo(db_name, e)
+        _db_restart_mongo(db_name, collection_name, e)
 
     return err, result
 
 
-def db_bulk_update(db_name, update_data, is_set=True, upsert=True, multi=True):
+def db_bulk_update(collection_name, update_data, is_set=True, upsert=True, multi=True, db_name=None):
     """Bulk update with a list of update-data.
 
     Args:
@@ -200,10 +227,10 @@ def db_bulk_update(db_name, update_data, is_set=True, upsert=True, multi=True):
     """
     update_data = [each_data for each_data in update_data if each_data.get('key', {}) and each_data.get('val', {})]
 
-    return db_force_bulk_update(db_name, update_data, is_set=is_set, upsert=upsert, multi=multi)
+    return db_force_bulk_update(collection_name, update_data, is_set=is_set, upsert=upsert, multi=multi, db_name=db_name)
 
 
-def db_force_bulk_update(db_name, update_data, is_set, upsert, multi):
+def db_force_bulk_update(collection_name, update_data, is_set, upsert, multi, db_name=None):
     """Bulk-update with a list of update-data
 
     Args:
@@ -216,6 +243,13 @@ def db_force_bulk_update(db_name, update_data, is_set, upsert, multi):
     Returns:
         (Error, dict): db-bulk-update-result
     """
+
+    if db_name is None:
+        db_name = _get_default_db(collection_name)
+
+    if db_name is None:
+        return Exception('unable to get db_name: collection: %s' % (collection_name)), {}
+
     err = None
     if is_set:
         for each_data in update_data:
@@ -224,7 +258,7 @@ def db_force_bulk_update(db_name, update_data, is_set, upsert, multi):
 
     result = None
     try:
-        bulk = cfg.config.get(db_name).initialize_unordered_bulk_op()
+        bulk = cfg.config[db_name]['db'][collection_name].initialize_unordered_bulk_op()
         for each_data in update_data:
             key = each_data.get('key', {})
             val = each_data.get('val', {})
@@ -244,12 +278,12 @@ def db_force_bulk_update(db_name, update_data, is_set, upsert, multi):
         err = e
         result = None
 
-        _db_restart_mongo(db_name, e)
+        _db_restart_mongo(db_name, collection_name, e)
 
     return err, getattr(result, 'raw_result', {})
 
 
-def db_update(db_name, key, val, is_set=True, upsert=True, multi=True):
+def db_update(collection_name, key, val, is_set=True, upsert=True, multi=True, db_name=None):
     """update data
 
     Args:
@@ -269,10 +303,10 @@ def db_update(db_name, key, val, is_set=True, upsert=True, multi=True):
         err = Exception('unable to db_update: no key or val: db_name: %s' % (db_name))
         return err, {}
 
-    return db_force_update(db_name, key, val, is_set=is_set, upsert=upsert, multi=multi)
+    return db_force_update(collection_name, key, val, is_set=is_set, upsert=upsert, multi=multi, db_name=db_name)
 
 
-def db_force_update(db_name, key, val, is_set=True, upsert=True, multi=True):
+def db_force_update(collection_name, key, val, is_set=True, upsert=True, multi=True, db_name=None):
     """udpate data
 
     Args:
@@ -288,25 +322,31 @@ def db_force_update(db_name, key, val, is_set=True, upsert=True, multi=True):
     """
     err = None
 
+    if db_name is None:
+        db_name = _get_default_db(collection_name)
+
+    if db_name is None:
+        return Exception('unable to get db_name: collection: %s' % (collection_name)), {}
+
     if is_set:
         val = {"$set": val}
 
     result = None
     try:
         if not multi:
-            result = cfg.config.get(db_name).update_one(key, val, upsert=upsert)
+            result = cfg.config[db_name]['db'][collection_name].update_one(key, val, upsert=upsert)
         else:
-            result = cfg.config.get(db_name).update_many(key, val, upsert=upsert)
+            result = cfg.config[db_name]['db'][collection_name].update_many(key, val, upsert=upsert)
     except Exception as e:
         err = e
         result = None
 
-        _db_restart_mongo(db_name, e)
+        _db_restart_mongo(db_name, collection_name, e)
 
     return err, getattr(result, 'raw_result', {})
 
 
-def db_insert_one(db_name, doc):
+def db_insert_one(collection_name, doc, db_name=None):
     """Insert one doc.
 
     Args:
@@ -322,10 +362,10 @@ def db_insert_one(db_name, doc):
         err = Exception('db_insert_one: no doc: db_name: %s' % (db_name))
         return err, {}
 
-    return db_insert(db_name, [doc])
+    return db_insert(collection_name, [doc], db_name=db_name)
 
 
-def db_remove(db_name, key):
+def db_remove(collection_name, key, db_name=None):
     """Remove data
 
     Args:
@@ -341,10 +381,10 @@ def db_remove(db_name, key):
         err = Exception('unable to db_remove: no key: db_name: %s' % (db_name))
         return err, {}
 
-    return db_force_remove(db_name, key=key)
+    return db_force_remove(collection_name, key=key, db_name=db_name)
 
 
-def db_force_remove(db_name, key=None):
+def db_force_remove(collection_name, key=None, db_name=None):
     """Remove data
 
     Args:
@@ -354,6 +394,12 @@ def db_force_remove(db_name, key=None):
     Returns:
         (Error, dict): db-remove-result
     """
+    if db_name is None:
+        db_name = _get_default_db(collection_name)
+
+    if db_name is None:
+        return Exception('unable to get db_name: collection: %s' % (collection_name)), {}
+
     if not key:
         key = {}
 
@@ -361,17 +407,17 @@ def db_force_remove(db_name, key=None):
 
     result = None
     try:
-        result = cfg.config.get(db_name).delete_many(key)
+        result = cfg.config[db_name]['db'][collection_name].delete_many(key)
     except Exception as e:
         err = e
         result = None
 
-        _db_restart_mongo(db_name, e)
+        _db_restart_mongo(db_name, collection_name, e)
 
     return err, getattr(result, 'raw_result', {})
 
 
-def db_distinct(db_name, distinct_key, query_key, fields=None, with_id=False):
+def db_distinct(collection_name, distinct_key, query_key, fields=None, with_id=False, db_name=None):
     """Distinct data
 
     Args:
@@ -387,11 +433,17 @@ def db_distinct(db_name, distinct_key, query_key, fields=None, with_id=False):
     if fields is None and not with_id:
         fields = {'_id': False}
 
+    if db_name is None:
+        db_name = _get_default_db(collection_name)
+
+    if db_name is None:
+        return Exception('unable to get db_name: collection: %s' % (collection_name)), []
+
     err = None
 
     results = []
     try:
-        db_result = cfg.config.get(db_name).find(query_key, projection=fields)
+        db_result = cfg.config[db_name]['db'][collection_name].find(query_key, projection=fields)
         results = db_result.distinct(distinct_key)
     except Exception as e:
         err = e
@@ -402,7 +454,7 @@ def db_distinct(db_name, distinct_key, query_key, fields=None, with_id=False):
     return err, results
 
 
-def db_set_if_not_exists(db_name, key, val, fields=None, with_id=False):
+def db_set_if_not_exists(collection_name, key, val, fields=None, with_id=False, db_name=None):
     """Summary
 
     Args:
@@ -418,15 +470,21 @@ def db_set_if_not_exists(db_name, key, val, fields=None, with_id=False):
     if fields is None and not with_id:
         fields = {'_id': False}
 
+    if db_name is None:
+        db_name = _get_default_db(collection_name)
+
+    if db_name is None:
+        return Exception('unable to get db_name: collection: %s' % (collection_name)), {}
+
     err = None
     result = {}
     try:
-        result = cfg.config.get(db_name).find_one_and_update(key, {"$setOnInsert": val}, projection=fields, upsert=True)
+        result = cfg.config[db_name]['db'][collection_name].find_one_and_update(key, {"$setOnInsert": val}, projection=fields, upsert=True)
     except Exception as e:
         err = e
         result = {}
 
-        _db_restart_mongo(db_name, e)
+        _db_restart_mongo(db_name, collection_name, e)
 
     if err:
         return err, {}
@@ -437,7 +495,7 @@ def db_set_if_not_exists(db_name, key, val, fields=None, with_id=False):
     return None, {}
 
 
-def db_find_and_modify(db_name, key, val, fields=None, with_id=False, is_set=True, upsert=True, multi=True):
+def db_find_and_modify(collection_name, key, val, fields=None, with_id=False, is_set=True, upsert=True, multi=True, db_name=None):
     """find and modify
 
     Args:
@@ -456,6 +514,12 @@ def db_find_and_modify(db_name, key, val, fields=None, with_id=False, is_set=Tru
     if fields is None and not with_id:
         fields = {'_id': False}
 
+    if db_name is None:
+        db_name = _get_default_db(collection_name)
+
+    if db_name is None:
+        return Exception('unable to get db_name: collection: %s' % (collection_name)), {}
+
     err = None
 
     if is_set:
@@ -463,19 +527,19 @@ def db_find_and_modify(db_name, key, val, fields=None, with_id=False, is_set=Tru
 
     result = {}
     try:
-        result = cfg.config.get(db_name).find_one_and_update(key, val, projection=fields, upsert=upsert, multi=multi)
+        result = cfg.config[db_name]['db'][collection_name].find_one_and_update(key, val, projection=fields, upsert=upsert, multi=multi)
         if not result:
             result = {}
     except Exception as e:
         err = e
         result = {}
 
-        _db_restart_mongo(db_name, e)
+        _db_restart_mongo(db_name, collection_name, e)
 
     return err, dict(result)
 
 
-def db_aggregate_iter(db_name, pipe):
+def db_aggregate_iter(collection_name, pipe, db_name=None):
     """db-aggregate
 
     Args:
@@ -485,11 +549,17 @@ def db_aggregate_iter(db_name, pipe):
     Returns:
         (Error, iterator): db-aggregate-results
     """
+    if db_name is None:
+        db_name = _get_default_db(collection_name)
+
+    if db_name is None:
+        return Exception('unable to get db_name: collection: %s' % (collection_name)), []
+
     err = None
 
     db_result = []
     try:
-        db_result = cfg.config.get(db_name).aggregate(pipeline=pipe, cursor={}, allowDiskUse=True)
+        db_result = cfg.config[db_name]['db'][collection_name].aggregate(pipeline=pipe, cursor={}, allowDiskUse=True)
     except Exception as e:
         err = e
         db_result = []
@@ -497,7 +567,7 @@ def db_aggregate_iter(db_name, pipe):
     return err, db_result
 
 
-def db_aggregate(db_name, pipe):
+def db_aggregate(collection_name, pipe, db_name=None):
     """db-aggregate
 
     Args:
@@ -509,7 +579,7 @@ def db_aggregate(db_name, pipe):
     """
     err = None
 
-    err, db_result = db_aggregate_iter(db_name, pipe)
+    err, db_result = db_aggregate_iter(collection_name, pipe, db_name=db_name)
     if err:
         return err, []
 
@@ -520,7 +590,7 @@ def db_aggregate(db_name, pipe):
         result = []
         err = e
 
-        _db_restart_mongo(db_name, e)
+        _db_restart_mongo(db_name, collection_name, e)
 
     return err, result
 
@@ -559,7 +629,7 @@ def db_aggregate_parse_result(db_result):
     return None, result
 
 
-def db_max(db_name, key, query, group_columns=None):
+def db_max(collection_name, key, query, group_columns=None, db_name=None):
     """Find largest record in the db, return as dict
 
     Args:
@@ -571,17 +641,23 @@ def db_max(db_name, key, query, group_columns=None):
     Returns:
         (Error, dict): largest record
     """
-    err, db_results = _db_max_list(db_name, key, query, group_columns)
+    if db_name is None:
+        db_name = _get_default_db(collection_name)
+
+    if db_name is None:
+        return Exception('unable to get db_name: collection: %s' % (collection_name)), {}
+
+    err, db_results = _db_max_list(collection_name, key, query, group_columns, db_name=db_name)
     if err:
         return err, db_results
 
     if not db_results:
-        return DBException('[empty]'), {}
+        return Exception('[empty]'), {}
 
     return None, db_results[0]['max']
 
 
-def _db_max_list(db_name, key, query, group_columns=None):
+def _db_max_list(collection_name, key, query, group_columns=None, db_name=None):
     """Find largest record in the db, return as list
 
     Args:
@@ -604,7 +680,7 @@ def _db_max_list(db_name, key, query, group_columns=None):
         {'$group': group},
     ]
 
-    err, results = db_aggregate(db_name, pipe)
+    err, results = db_aggregate(collection_name, pipe, db_name=db_name)
 
     if err:
         return err, []
@@ -612,7 +688,7 @@ def _db_max_list(db_name, key, query, group_columns=None):
     return None, results
 
 
-def _db_restart_mongo(db_name, e):
+def _db_restart_mongo(db_name, collection_name, e):
     """Restart mongo with the corresponding db-name
 
 
@@ -635,19 +711,25 @@ def _db_restart_mongo(db_name, e):
 
     cfg.logger.debug('to restart mongo: e: %s', e)
 
-    cfg.restart_mongo(db_name)
+    cfg.restart_mongo(collection_name=collection_name, db_name=db_name)
 
     return None
 
 
-def drop(db_name):
+def drop(collection_name, db_name=None):
+    if db_name is None:
+        db_name = _get_default_db(collection_name)
+
+    if db_name is None:
+        return Exception('unable to get db_name: collection: %s' % (collection_name))
+
     err = None
     try:
-        cfg.config.get(db_name).drop()
+        cfg.config[db_name]['db'][collection_name].drop()
     except Exception as e:
         err = e
 
-        _db_restart_mongo(db_name, e)
+        _db_restart_mongo(db_name, collection_name, e)
 
     return err
 
@@ -673,3 +755,11 @@ def _flatten_results_with_err(results_with_err):
         return err, results
 
     return None, results
+
+
+def _get_default_db(collection_name):
+    for db_name, val in cfg.config.items():
+        if collection_name in val['db']:
+            return db_name
+
+    return None

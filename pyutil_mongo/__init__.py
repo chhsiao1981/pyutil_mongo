@@ -4,6 +4,7 @@ from .cfg import MongoMap
 from .cfg import init
 from .cfg import restart_mongo
 
+from .util import db_list
 from .util import db_find_one_ne
 from .util import db_find_one
 from .util import db_find_ne
