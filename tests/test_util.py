@@ -126,6 +126,24 @@ class TestUtil(unittest.TestCase):
         self.assertEqual(1, len(db_results))
         self.assertEqual([{'key1': 'a', 'key2': 'c'}], db_results)
 
+    def test_db_update(self):
+        err, db_result = util.db_remove('a', {'key1': 'a'})
+        self.assertIsNone(err)
+
+        err, db_result = util.db_remove('a', {'key1': 'b'})
+        self.assertIsNone(err)
+
+        err, db_result = util.db_update('a', {'key1': 'a'}, {'key2': 'b'})
+        err, db_result = util.db_update('a', {'key1': 'a'}, {'key2': 'd'})
+        err, db_result = util.db_update('a', {'key1': 'a'}, {'key2': 'c'})
+        self.assertIsNone(err)
+
+        err, db_results = util.db_find('a', {'key1': 'a'})
+        self.logger.debug('test_db_bulk_update: after db_find: db_results: %s', db_results)
+        self.assertIsNone(err)
+        self.assertEqual(1, len(db_results))
+        self.assertEqual([{'key1': 'a', 'key2': 'c'}], db_results)
+
     def test_db_distinct(self):
         err, db_result = util.db_remove('a', {'key1': 'a'})
         self.assertIsNone(err)

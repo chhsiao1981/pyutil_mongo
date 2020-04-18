@@ -4,15 +4,12 @@
 Attributes:
     config (dict): Description
     logger (logging.Logger): Description
-    MONGO_MAPS (list[MongoMap]): Description
 """
 import logging
 from pymongo import MongoClient
 
 logger = None
 config = {}
-
-MONGO_MAPS = None
 
 
 class MongoMap(object):
@@ -30,14 +27,15 @@ class MongoMap(object):
     collection_map = None
     ensure_index = None
     ensure_unique_index = None
-    name = ""
+    db_name = ""
     hostname = ""
-    db = ""
+    mongo_db_name = ""
     ssl = False
     cert = None
     ca = None
+    is_default= False
 
-    def __init__(self, collection_map: dict, ensure_index=None, ensure_unique_index=None, name="mongo", hostname="localhost:27017", db="test", ssl=False, cert=None, ca=None):
+    def __init__(self, collection_map: dict, ensure_index=None, ensure_unique_index=None, db_name="mongo", hostname="localhost:27017", mongo_db_name="test", ssl=False, cert=None, ca=None, is_default=False):
         """Summary
 
         Args:
@@ -48,15 +46,16 @@ class MongoMap(object):
             hostname (str, optional): Description
             db (str, optional): Description
         """
-        self.name = name
+        self.db_name = db_name
         self.hostname = hostname
-        self.db = db
+        self.mongo_db_name = mongo_db_name
         self.collection_map = collection_map
         self.ensure_index = ensure_index
         self.ensure_unique_index = ensure_unique_index
         self.ssl = ssl
         self.cert = cert
         self.ca = ca
+        self.is_default = is_default
 
 
 def init(the_logger: logging.Logger, mongo_maps: list):
@@ -67,15 +66,13 @@ def init(the_logger: logging.Logger, mongo_maps: list):
         mongo_maps (list[MongoMap]): Description
     """
     global logger
-    global MONGO_MAPS
 
     logger = the_logger
-    MONGO_MAPS = mongo_maps
 
-    return restart_mongo()
+    return restart_mongo(mongo_maps=mongo_maps)
 
 
-def restart_mongo(collection_name=""):
+def restart_mongo(collection_name="", db_name="", mongo_maps=None):
     """Summary
 
     Args:
@@ -84,19 +81,33 @@ def restart_mongo(collection_name=""):
     Returns:
         TYPE: Description
     """
-    global MONGO_MAPS
     '''
     initialize mongo
     '''
+    global config
 
-    if MONGO_MAPS is None:
-        raise Exception('invalid mongo-map')
+    if mongo_maps is None:
+        mongo_maps = [each['mongo_map'] for each in config.values()]
 
-    for mongo_map in MONGO_MAPS:
-        _init_mongo_map_core(mongo_map, collection_name=collection_name)
+    if len(mongo_maps) == 0:
+        return
+
+    errs = []
+    for idx, mongo_map in enumerate(mongo_maps):
+        each_err = _init_mongo_map_core(mongo_map, collection_name=collection_name, db_name=db_name)
+        if each_err:
+            errs.append(each_err)
+            logger.error('(%s/%s): e: %s', idx, len(mongo_maps), each_err)
+
+    if not errs:
+        return None
+
+    err_str = ','.join(['%s' % (each) for each in errs])
+
+    return Exception(err_str)
 
 
-def _init_mongo_map_core(mongo_map: MongoMap, collection_name=""):
+def _init_mongo_map_core(mongo_map: MongoMap, collection_name="", db_name=""):
     """Summary
 
     Args:
@@ -112,10 +123,16 @@ def _init_mongo_map_core(mongo_map: MongoMap, collection_name=""):
     global config
     global logger
 
-    name, hostname, db, collection_map, ensure_index, ensure_unique_index = mongo_map.name, mongo_map.hostname, mongo_map.db, mongo_map.collection_map, mongo_map.ensure_index, mongo_map.ensure_unique_index
+    mongo_map_db_name, hostname, mongo_db_name, collection_map, ensure_index, ensure_unique_index = mongo_map.db_name, mongo_map.hostname, mongo_map.mongo_db_name, mongo_map.collection_map, mongo_map.ensure_index, mongo_map.ensure_unique_index
+
+    if db_name != '' and mongo_map_db_name != db_name:
+        return
 
     if collection_name != '' and collection_name not in collection_map:
         return
+
+    if collection_name == '' and mongo_map_db_name in config:
+        return Exception('db already in config: db_name: %s config: %s', mongo_map_db_name, config[mongo_map_db_name])
 
     if ensure_index is None:
         ensure_index = {}
@@ -123,53 +140,49 @@ def _init_mongo_map_core(mongo_map: MongoMap, collection_name=""):
     if ensure_unique_index is None:
         ensure_unique_index = {}
 
-    mongo_server_url = name + '_MONGO_SERVER_URL'
-    mongo_server_idx = name + '_MONGO_SERVER'
-
     # mongo_server_url
-    if mongo_server_url not in config:
-        config[mongo_server_url] = "mongodb://" + hostname + "/" + db
+    mongo_server_url = "mongodb://" + hostname + "/" + mongo_db_name
 
-    # mongo-server-idx
-    if mongo_server_idx not in config:
-        mongo_kwargs = {}
-        if mongo_map.ssl:
-            mongo_kwargs.update({
-                'ssl': True,
-                'authSource': '$external',
-                'authMechanism': 'MONGODB-X509',
-                'ssl_certfile': mongo_map.cert,
-                'ssl_ca_certs': mongo_map.ca,
-            })
+    # mongo-server-client
+    mongo_kwargs = {}
+    if mongo_map.ssl:
+        mongo_kwargs.update({
+            'ssl': True,
+            'authSource': '$external',
+            'authMechanism': 'MONGODB-X509',
+            'ssl_certfile': mongo_map.cert,
+            'ssl_ca_certs': mongo_map.ca,
+        })
 
-        config[mongo_server_idx] = MongoClient(
-            config.get(mongo_server_url),
-            **mongo_kwargs,
-        )[db]
+    mongo_server_client = MongoClient(
+        mongo_server_url,
+        **mongo_kwargs,
+    )[mongo_db_name]
+
+    # config-by-db-name
+    config_by_db_name = {'mongo_map': mongo_map, 'db': {}, 'url': mongo_server_url}
 
     # collection
     for (key, val) in collection_map.items():
-        if key in config and collection_name == "":
-            logger.warning('key already in config: key: %s config: %s', key, config[key])
-            continue
-
         logger.info('mongo: %s => %s', key, val)
-        config[key] = config.get(mongo_server_idx)[val]
+        config_by_db_name['db'][key] = mongo_server_client[val]
 
     # enure index
     for key, val in ensure_index.items():
         logger.info('to ensure_index: key: %s', key)
-        config[key].create_index(val, background=True)
+        config_by_db_name['db'][key].create_index(val, background=True)
 
     # enure unique index
     for key, val in ensure_unique_index.items():
         logger.info('to ensure_unique_index: key: %s', key)
-        config[key].create_index(val, background=True, unique=True)
+        config_by_db_name['db'][key].create_index(val, background=True, unique=True)
+
+    config[mongo_map_db_name] = config_by_db_name
+    if mongo_map.is_default:
+        config['_default_db'] = mongo_map_db_name
 
 
 def clean():
     global config
-    global MONGO_MAPS
 
     config = {}
-    MONGO_MAPS = None

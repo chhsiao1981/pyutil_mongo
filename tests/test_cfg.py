@@ -38,8 +38,8 @@ class TestCfg(unittest.TestCase):
 
         self.assertIsNone(err)
 
-        self.assertEqual(4, len(cfg.config))
-        self.assertEqual(True, 'a' in cfg.config)
+        self.assertEqual(1, len(cfg.config))
+        self.assertEqual(True, 'a' in cfg.config['mongo']['db'])
 
         err = cfg.init(logger, [mongo_map])
-        self.assertIsNone(err)
+        self.assertIsNotNone(err)
