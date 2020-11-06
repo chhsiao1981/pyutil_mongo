@@ -23,7 +23,7 @@ class TestInit(unittest.TestCase):
         collection_map = {
             'a': 'b',
         }
-        mongo_map = pyutil_mongo.MongoMap(collection_map)
+        mongo_map = pyutil_mongo.MongoMap(collection_map, mongo_protocol='mongomock')
 
         err = pyutil_mongo.init(logger, [mongo_map])
 

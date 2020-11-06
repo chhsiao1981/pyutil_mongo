@@ -3,7 +3,7 @@
 import unittest
 import logging
 import pymongo
-from pymongo.cursor import Cursor
+from mongomock.collection import Cursor
 
 from pyutil_mongo import cfg
 from pyutil_mongo import util
@@ -20,7 +20,7 @@ class TestUtil(unittest.TestCase):
         ensure_index = {
             'a': [('key1', pymongo.ASCENDING)],
         }
-        mongo_map = cfg.MongoMap(collection_map, ensure_index=ensure_index)
+        mongo_map = cfg.MongoMap(collection_map, ensure_index=ensure_index, mongo_protocol='mongomock')
 
         err = cfg.init(self.logger, [mongo_map])
 
@@ -152,6 +152,7 @@ class TestUtil(unittest.TestCase):
         self.assertIsNone(err)
 
         err, db_results = util.db_distinct('a', 'key2', {'key1': 'a'})
+        db_results.sort()
         self.logger.debug('test_db_distinct: after db_distinct: e: %s db_results: %s', err, db_results)
         self.assertIsNone(err)
         self.assertEqual(2, len(db_results))

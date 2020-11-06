@@ -1,51 +1,35 @@
 # -*- coding: utf-8 -*-
-"""Summary
-
+"""
 Attributes:
     config (dict): Description
     logger (logging.Logger): Description
 """
 import logging
-from pymongo import MongoClient
+import pymongo
+import mongomock
+
 
 logger = None
 config = {}
 
 
 class MongoMap(object):
-    """Summary
+    """Info about MongoDB
 
     Attributes:
+        ca (None, optional): ssl-ca
+        cert (None, optional): ssl-cert
         collection_map (dict): mapping for the collection-name in the code vs. real collection-name in the mongo.
-        db (str): db name in the real mongo.
-        ensure_index (TYPE): Description
-        ensure_unique_index (TYPE): Description
+        db_name (str, optional): db-name used in the code.
+        ensure_index (None, optional): ensure-index
+        ensure_unique_index (None, optional): ensure-unique-index
         hostname (str): hostname of the real mongo.
-        name (str): the name of the MongoMap.
+        mongo_db_name (str, optional): real db-name in mongodb.
+        mongo_protocol (str, optional): mongodb or mongomock
+        ssl (bool, optional): whether to use ssl
     """
 
-    collection_map = None
-    ensure_index = None
-    ensure_unique_index = None
-    db_name = ""
-    hostname = ""
-    mongo_db_name = ""
-    ssl = False
-    cert = None
-    ca = None
-    is_default= False
-
-    def __init__(self, collection_map: dict, ensure_index=None, ensure_unique_index=None, db_name="mongo", hostname="localhost:27017", mongo_db_name="test", ssl=False, cert=None, ca=None, is_default=False):
-        """Summary
-
-        Args:
-            collection_map (dict): Description
-            ensure_index (None, optional): Description
-            ensure_unique_index (None, optional): Description
-            name (str, optional): Description
-            hostname (str, optional): Description
-            db (str, optional): Description
-        """
+    def __init__(self, collection_map: dict, ensure_index=None, ensure_unique_index=None, db_name="mongo", hostname="localhost:27017", mongo_db_name="test", ssl=False, cert=None, ca=None, mongo_protocol='mongodb'):
         self.db_name = db_name
         self.hostname = hostname
         self.mongo_db_name = mongo_db_name
@@ -55,15 +39,18 @@ class MongoMap(object):
         self.ssl = ssl
         self.cert = cert
         self.ca = ca
-        self.is_default = is_default
+        self.mongo_protocol = mongo_protocol
 
 
 def init(the_logger: logging.Logger, mongo_maps: list):
-    """Summary
+    """init
 
     Args:
-        logger (logging.Logger): Description
-        mongo_maps (list[MongoMap]): Description
+        the_logger (logging.Logger): Description
+        mongo_maps (list): list of MongoDB info
+
+    Returns:
+        TYPE: Description
     """
     global logger
 
@@ -73,10 +60,12 @@ def init(the_logger: logging.Logger, mongo_maps: list):
 
 
 def restart_mongo(collection_name="", db_name="", mongo_maps=None):
-    """Summary
+    """restarting mongo
 
     Args:
-        collection_name (str, optional): Description
+        collection_name (str, optional): collection-name
+        db_name (str, optional): db-name
+        mongo_maps (None, optional): mongo-maps
 
     Returns:
         TYPE: Description
@@ -113,17 +102,15 @@ def _init_mongo_map_core(mongo_map: MongoMap, collection_name="", db_name=""):
     Args:
         mongo_map (MongoMap): Description
         collection_name (str, optional): Description
+        db_name (str, optional): Description
 
     Returns:
         TYPE: Description
-
-    Deleted Parameters:
-        db_name (str, optional): Description
     """
     global config
     global logger
 
-    mongo_map_db_name, hostname, mongo_db_name, collection_map, ensure_index, ensure_unique_index = mongo_map.db_name, mongo_map.hostname, mongo_map.mongo_db_name, mongo_map.collection_map, mongo_map.ensure_index, mongo_map.ensure_unique_index
+    mongo_map_db_name, hostname, mongo_db_name, collection_map, ensure_index, ensure_unique_index, mongo_protocol = mongo_map.db_name, mongo_map.hostname, mongo_map.mongo_db_name, mongo_map.collection_map, mongo_map.ensure_index, mongo_map.ensure_unique_index, mongo_map.mongo_protocol
 
     if db_name != '' and mongo_map_db_name != db_name:
         return
@@ -154,10 +141,17 @@ def _init_mongo_map_core(mongo_map: MongoMap, collection_name="", db_name=""):
             'ssl_ca_certs': mongo_map.ca,
         })
 
-    mongo_server_client = MongoClient(
-        mongo_server_url,
-        **mongo_kwargs,
-    )[mongo_db_name]
+    mongo_server_client = None
+    if mongo_protocol == 'mongomock':
+        mongo_server_client = mongomock.MongoClient(
+            mongo_server_url,
+            **mongo_kwargs,
+        )[mongo_db_name]
+    else:
+        mongo_server_client = pymongo.MongoClient(
+            mongo_server_url,
+            **mongo_kwargs,
+        )[mongo_db_name]
 
     # config-by-db-name
     config_by_db_name = {'mongo_map': mongo_map, 'db': {}, 'url': mongo_server_url}
@@ -178,11 +172,11 @@ def _init_mongo_map_core(mongo_map: MongoMap, collection_name="", db_name=""):
         config_by_db_name['db'][key].create_index(val, background=True, unique=True)
 
     config[mongo_map_db_name] = config_by_db_name
-    if mongo_map.is_default:
-        config['_default_db'] = mongo_map_db_name
 
 
 def clean():
+    """Reset config
+    """
     global config
 
     config = {}
