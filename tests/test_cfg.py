@@ -30,7 +30,7 @@ class TestCfg(unittest.TestCase):
         ensure_unique_index = {
             'a2': [('key2', pymongo.ASCENDING)],
         }
-        mongo_map = cfg.MongoMap(collection_map, ensure_index=ensure_index, ensure_unique_index=ensure_unique_index)
+        mongo_map = cfg.MongoMap(collection_map, ensure_index=ensure_index, ensure_unique_index=ensure_unique_index, mongo_protocol='mongomock')
 
         err = cfg.init(logger, [mongo_map])
 

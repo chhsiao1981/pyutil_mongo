@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="pyutil_mongo",
-    version="1.0.1",
+    version='1.1.0',
     author="chhsiao",
     author_email="hsiao.chuanheng@gmail.com",
     description="python util for mongodb",
@@ -14,7 +14,8 @@ setuptools.setup(
     url="https://github.com/chhsiao1981/pyutil_mongo",
     packages=setuptools.find_packages(exclude=["tests"]),
     install_requires=[
-        'pymongo==3.10.1',
+        'pymongo>=3.10.1',
+        'mongomock>=3.20.0',
     ],
     classifiers=[
         "Programming Language :: Python :: 3",
