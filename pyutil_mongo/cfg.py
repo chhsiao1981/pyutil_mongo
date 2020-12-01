@@ -6,7 +6,6 @@ Attributes:
 """
 import logging
 import pymongo
-import mongomock
 
 
 logger = None
@@ -25,11 +24,10 @@ class MongoMap(object):
         ensure_unique_index (None, optional): ensure-unique-index
         hostname (str): hostname of the real mongo.
         mongo_db_name (str, optional): real db-name in mongodb.
-        mongo_protocol (str, optional): mongodb or mongomock
         ssl (bool, optional): whether to use ssl
     """
 
-    def __init__(self, collection_map: dict, ensure_index=None, ensure_unique_index=None, db_name="mongo", hostname="localhost:27017", mongo_db_name="test", ssl=False, cert=None, ca=None, mongo_protocol='mongodb'):
+    def __init__(self, collection_map: dict, ensure_index=None, ensure_unique_index=None, db_name="mongo", hostname="localhost:27017", mongo_db_name="test", ssl=False, cert=None, ca=None):
         self.db_name = db_name
         self.hostname = hostname
         self.mongo_db_name = mongo_db_name
@@ -39,7 +37,6 @@ class MongoMap(object):
         self.ssl = ssl
         self.cert = cert
         self.ca = ca
-        self.mongo_protocol = mongo_protocol
 
 
 def init(the_logger: logging.Logger, mongo_maps: list):
@@ -110,7 +107,7 @@ def _init_mongo_map_core(mongo_map: MongoMap, collection_name="", db_name=""):
     global config
     global logger
 
-    mongo_map_db_name, hostname, mongo_db_name, collection_map, ensure_index, ensure_unique_index, mongo_protocol = mongo_map.db_name, mongo_map.hostname, mongo_map.mongo_db_name, mongo_map.collection_map, mongo_map.ensure_index, mongo_map.ensure_unique_index, mongo_map.mongo_protocol
+    mongo_map_db_name, hostname, mongo_db_name, collection_map, ensure_index, ensure_unique_index = mongo_map.db_name, mongo_map.hostname, mongo_map.mongo_db_name, mongo_map.collection_map, mongo_map.ensure_index, mongo_map.ensure_unique_index
 
     if db_name != '' and mongo_map_db_name != db_name:
         return
@@ -128,7 +125,7 @@ def _init_mongo_map_core(mongo_map: MongoMap, collection_name="", db_name=""):
         ensure_unique_index = {}
 
     # mongo_server_url
-    mongo_server_url = "mongodb://" + hostname + "/" + mongo_db_name
+    mongo_server_url = 'mongodb://%s/%s' % (hostname, mongo_db_name)
 
     # mongo-server-client
     mongo_kwargs = {}
@@ -141,17 +138,10 @@ def _init_mongo_map_core(mongo_map: MongoMap, collection_name="", db_name=""):
             'ssl_ca_certs': mongo_map.ca,
         })
 
-    mongo_server_client = None
-    if mongo_protocol == 'mongomock':
-        mongo_server_client = mongomock.MongoClient(
-            mongo_server_url,
-            **mongo_kwargs,
-        )[mongo_db_name]
-    else:
-        mongo_server_client = pymongo.MongoClient(
-            mongo_server_url,
-            **mongo_kwargs,
-        )[mongo_db_name]
+    mongo_server_client = pymongo.MongoClient(
+        mongo_server_url,
+        **mongo_kwargs,
+    )[mongo_db_name]
 
     # config-by-db-name
     config_by_db_name = {'mongo_map': mongo_map, 'db': {}, 'url': mongo_server_url}

@@ -6,6 +6,7 @@ import logging
 import pyutil_mongo
 from pyutil_mongo import cfg
 from pyutil_mongo import util
+import mongomock
 
 
 class TestInit(unittest.TestCase):
@@ -17,13 +18,14 @@ class TestInit(unittest.TestCase):
         util.drop('a')
         cfg.clean()
 
+    @mongomock.patch(servers=(('localhost', 27017),))
     def test_init(self):
         logger = logging.getLogger("test")
 
         collection_map = {
             'a': 'b',
         }
-        mongo_map = pyutil_mongo.MongoMap(collection_map, mongo_protocol='mongomock')
+        mongo_map = pyutil_mongo.MongoMap(collection_map)
 
         err = pyutil_mongo.init(logger, [mongo_map])
 
