@@ -7,10 +7,12 @@ from mongomock.collection import Cursor
 
 from pyutil_mongo import cfg
 from pyutil_mongo import util
+import mongomock
 
 
 class TestUtil(unittest.TestCase):
 
+    @mongomock.patch(servers=(('localhost', 27017),))
     def setUp(self):
         self.logger = logging.getLogger('test')
         collection_map = {
@@ -20,7 +22,7 @@ class TestUtil(unittest.TestCase):
         ensure_index = {
             'a': [('key1', pymongo.ASCENDING)],
         }
-        mongo_map = cfg.MongoMap(collection_map, ensure_index=ensure_index, mongo_protocol='mongomock')
+        mongo_map = cfg.MongoMap(collection_map, ensure_index=ensure_index)
 
         err = cfg.init(self.logger, [mongo_map])
 
